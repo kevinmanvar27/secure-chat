@@ -35,15 +35,18 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   bool _isConnected = false;
   bool _isCameraReady = false;
   bool _hasPermissions = false;
-  bool _isMuted = false; // Default unmuted for random calls
+  bool _isMuted = false;
   bool _isCameraOff = false;
-  bool _isFrontCamera = true; // Track front/back camera for mirror
-  bool _isConnecting = false; // Prevent multiple connection attempts
+  bool _isFrontCamera = true;
+  bool _isConnecting = false;
   
   // Session ID to track current connection session - prevents old stream issues
   String? _currentSessionId;
   
-  // Successful connection counter for ads (show ad after every 3 connections)
+  // IMPORTANT: Track skipped/connected users in this session to avoid reconnecting
+  final Set<String> _skippedUsersThisSession = {};
+  
+  // Successful connection counter for ads
   int _successfulConnectionCount = 0;
   static const int _adAfterConnections = 3;
   
@@ -60,18 +63,46 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   StreamSubscription? _remoteStreamSubscription;
   StreamSubscription? _disconnectSubscription;
   StreamSubscription? _matchSubscription;
+  StreamSubscription? _localStreamSubscription;
+  
+  // Banner settings (controlled from admin panel via Firebase)
+  bool _showBanner = false;
+  Color _bannerColor = Colors.purple;
+  StreamSubscription? _bannerSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Don't initialize renderers here - do it when tab becomes active
+    _listenToBannerSettings();
+  }
+  
+  /// Listen to banner settings from Firebase
+  void _listenToBannerSettings() {
+    _bannerSubscription = _database.child('app_settings/random_banner').onValue.listen((event) {
+      if (mounted) {
+        final data = event.snapshot.value as Map<dynamic, dynamic>?;
+        setState(() {
+          _showBanner = data?['enabled'] as bool? ?? false;
+          // Parse color if provided, default to purple
+          final colorHex = data?['color'] as String?;
+          if (colorHex != null && colorHex.isNotEmpty) {
+            try {
+              _bannerColor = Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
+            } catch (_) {
+              _bannerColor = Colors.purple;
+            }
+          }
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _uiHideTimer?.cancel();
+    _bannerSubscription?.cancel();
     _cleanup();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
@@ -105,31 +136,26 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
         _renderersInitialized = true;
       }
       
-      _initCamera();
+      await _initCamera();
     }
   }
 
   /// Called when tab becomes inactive
-  /// Returns true if tab can be switched, false if user cancelled
   Future<bool> onTabInactive() async {
-    if (_isTabActive) {
-      // If connected, ask for confirmation before switching
-      if (_isConnected) {
-        final shouldSwitch = await _showTabSwitchConfirmation();
-        if (!shouldSwitch) {
-          return false; // User cancelled, don't switch tab
-        }
+    if (_isConnected || _isConnecting) {
+      // Show confirmation dialog
+      final shouldLeave = await _showLeaveConfirmation();
+      if (!shouldLeave) {
+        return false; // Don't allow tab switch
       }
-      _isTabActive = false;
-      _stopEverything();
     }
+    
+    _isTabActive = false;
+    _stopEverything();
     return true;
   }
 
-  /// Show confirmation dialog before switching tab during call
-  Future<bool> _showTabSwitchConfirmation() async {
-    if (!mounted) return true;
-    
+  Future<bool> _showLeaveConfirmation() async {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -164,20 +190,22 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   }
 
   void _stopEverything() {
-    // Invalidate session and disable wakelock
     _currentSessionId = null;
     WakelockPlus.disable();
     
     _endCurrentCall();
     _stopSearching();
     _disposeLocalStream();
-    setState(() {
-      _isCameraReady = false;
-      _isConnected = false;
-      _isConnecting = false;
-      _connectedUserId = null;
-      _statusText = 'Tap Start to find someone';
-    });
+    
+    if (mounted) {
+      setState(() {
+        _isCameraReady = false;
+        _isConnected = false;
+        _isConnecting = false;
+        _connectedUserId = null;
+        _statusText = 'Tap Start to find someone';
+      });
+    }
   }
 
   void _cleanup() {
@@ -188,6 +216,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
     _remoteStreamSubscription?.cancel();
     _disconnectSubscription?.cancel();
     _matchSubscription?.cancel();
+    _localStreamSubscription?.cancel();
     _leaveRandomPool();
     _endCurrentCall();
     _disposeLocalStream();
@@ -200,7 +229,6 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   Future<void> _initCamera() async {
     if (_isCameraReady || !_isTabActive) return;
     
-    // Request permissions
     Map<Permission, PermissionStatus> statuses = await [
       Permission.camera,
       Permission.microphone,
@@ -219,24 +247,22 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
     }
 
     try {
-      // Initialize WebRTC local stream
       await _webrtcService.initializeLocalStream();
       
-      // Set local renderer
       _localRenderer.srcObject = _webrtcService.currentLocalStream;
 
       if (mounted) {
         setState(() {
           _isCameraReady = true;
           _statusText = 'Tap Start to find someone';
-          // Sync mic/camera state from WebRTC
           _isMuted = !_webrtcService.isMicEnabled;
           _isCameraOff = !_webrtcService.isCameraEnabled;
         });
       }
       
-      // Listen for local stream changes (when stream is reinitialized after skip)
-      _webrtcService.localStream.listen((stream) {
+      // Listen for local stream changes (when stream is reinitialized)
+      _localStreamSubscription?.cancel();
+      _localStreamSubscription = _webrtcService.localStream.listen((stream) {
         if (mounted && _isTabActive) {
           _localRenderer.srcObject = stream;
         }
@@ -245,15 +271,11 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
       // Listen for remote stream
       _remoteStreamSubscription?.cancel();
       _remoteStreamSubscription = _webrtcService.remoteStream.listen((stream) {
-        // Only accept stream if we are actively connecting (not already connected)
-        // AND session ID matches current session - prevents old stream issues
         final expectedSessionId = _currentSessionId;
         if (mounted && _isTabActive && _isConnecting && !_isConnected && 
             expectedSessionId != null && expectedSessionId == _currentSessionId) {
-          // Increment successful connection count
           _successfulConnectionCount++;
           
-          // Enable wakelock to keep screen on during call
           WakelockPlus.enable();
           
           setState(() {
@@ -261,13 +283,11 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
             _isConnected = true;
             _isConnecting = false;
             _isSearching = false;
-            _isUIVisible = true; // Show UI when first connected
+            _isUIVisible = true;
             _statusText = 'Connected!';
-            // Sync mic/camera state again when connected
             _isMuted = !_webrtcService.isMicEnabled;
             _isCameraOff = !_webrtcService.isCameraEnabled;
           });
-          // Start auto-hide timer
           _startUIAutoHideTimer();
         }
       });
@@ -291,7 +311,6 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
 
   void _onRemoteDisconnect() {
     if (_isConnecting) {
-      // Connection failed during setup
       _showSnackBar('Connection failed. Trying again...');
     } else {
       _showSnackBar('Stranger disconnected');
@@ -299,7 +318,6 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
     _skipToNext();
   }
 
-  /// Check if should show ad (after every 3 successful connections)
   bool _shouldShowAdAfterConnections() {
     return _successfulConnectionCount > 0 && 
            _successfulConnectionCount % _adAfterConnections == 0;
@@ -308,8 +326,6 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   /// Join random pool and wait for match
   Future<void> _startSearching() async {
     if (!_isTabActive || _isConnecting || _isConnected) return;
-    
-    // Don't start if ad is showing
     if (_adService.isShowingAd) return;
     
     if (!_hasPermissions) {
@@ -318,35 +334,28 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
       return;
     }
 
-    // Show ad after every 3 successful connections (not before first search)
+    // Show ad after every 3 successful connections
     if (_shouldShowAdAfterConnections()) {
       setState(() {
         _statusText = 'Loading...';
       });
       
-      // Show ad and WAIT for it to complete before proceeding
       await _adService.showInterstitialAd();
       
-      // Check if tab is still active after ad
       if (!_isTabActive || !mounted) return;
-      
-      // Small delay after ad closes
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    // IMPORTANT: End any existing call and reset WebRTC FIRST
+    // End any existing call
     if (_currentRoomId != null) {
       await _webrtcService.endCall(_currentRoomId!);
       _currentRoomId = null;
     }
     
-    // Reset WebRTC connection state for fresh start
+    // Reset WebRTC for fresh start
     await _webrtcService.resetConnection();
-
-    // IMPORTANT: Clear remote renderer completely before new search
     _clearRemoteRenderer();
     
-    // Small delay after reset
     await Future.delayed(const Duration(milliseconds: 100));
 
     if (!mounted || !_isTabActive) return;
@@ -359,40 +368,35 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
       _statusText = 'Searching for someone...';
     });
 
-    // Join random pool with timestamp
+    // Generate unique search session ID
+    final searchSessionId = '${myUserId}_${DateTime.now().millisecondsSinceEpoch}';
+    
+    // Join random pool with session info
     await _database.child('random_pool/$myUserId').set({
       'joinedAt': ServerValue.timestamp,
       'status': 'waiting',
+      'searchSessionId': searchSessionId,
     });
 
-    // Start looking for matches
     _findMatch();
-    
-    // Also listen for incoming match requests
     _listenForMatchRequests();
   }
 
-  /// Clear remote renderer to prevent freeze/glitch
   void _clearRemoteRenderer() {
-    // Invalidate current session to reject any pending old streams
     _currentSessionId = null;
-    
-    // Disable wakelock when call ends
     WakelockPlus.disable();
     
-    // Stop all tracks on remote renderer first
     if (_remoteRenderer.srcObject != null) {
       try {
         _remoteRenderer.srcObject!.getTracks().forEach((track) {
           track.stop();
         });
       } catch (e) {
-        // Ignore errors when stopping tracks
+        // Ignore
       }
       _remoteRenderer.srcObject = null;
     }
     
-    // Force UI update immediately
     if (mounted) {
       setState(() {
         _isConnected = false;
@@ -402,11 +406,8 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
     }
   }
 
-  /// Find another user in the pool and initiate connection
   void _findMatch() {
     _searchTimer?.cancel();
-    
-    // First immediate check, then periodic
     _checkForMatch();
     
     _searchTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
@@ -418,22 +419,20 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
     });
   }
 
-  /// Check for available users and try to match
   Future<void> _checkForMatch() async {
-    // Don't check if ad is showing
     if (!_isSearching || !_isTabActive || _isConnected || _isConnecting || _adService.isShowingAd) return;
 
     try {
-      // Get all users in random pool
       final snapshot = await _database.child('random_pool').get();
       
       if (!snapshot.exists || snapshot.value == null) return;
       
       final poolMap = snapshot.value as Map<dynamic, dynamic>;
       
-      // Find waiting users (not myself, not already matched)
+      // Find waiting users - exclude myself and skipped users
       final waitingUsers = poolMap.entries
           .where((e) => e.key != myUserId)
+          .where((e) => !_skippedUsersThisSession.contains(e.key.toString()))
           .where((e) {
             final data = e.value as Map<dynamic, dynamic>;
             return data['status'] == 'waiting';
@@ -443,35 +442,32 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
       
       if (waitingUsers.isEmpty) return;
       
-      // Pick random user
       waitingUsers.shuffle();
       final targetUserId = waitingUsers.first;
       
-      // Try to match with this user (atomic operation)
       final matchResult = await _tryMatch(targetUserId);
       
-      if (matchResult && _isSearching && _isTabActive && !_isConnected && !_isConnecting) {
+      if (matchResult != null && _isSearching && _isTabActive && !_isConnected && !_isConnecting) {
         _searchTimer?.cancel();
-        _initiateConnection(targetUserId, isCaller: true);
+        _initiateConnection(targetUserId, isCaller: true, roomId: matchResult);
       }
     } catch (e) {
       // Continue searching
     }
   }
 
-  /// Try to match with a user atomically
-  Future<bool> _tryMatch(String targetUserId) async {
+  /// Try to match with a user atomically - returns roomId if successful
+  Future<String?> _tryMatch(String targetUserId) async {
     try {
-      // Create a unique room ID (sorted to ensure both users get same ID)
+      // Create UNIQUE room ID with timestamp - prevents same room issues
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final users = [myUserId, targetUserId]..sort();
-      final roomId = '${users[0]}_${users[1]}';
+      final roomId = '${users[0]}_${users[1]}_$timestamp';
       
-      // Try to claim this match
       final matchRef = _database.child('random_matches/$roomId');
       
       final result = await matchRef.runTransaction((data) {
         if (data != null) {
-          // Match already exists
           return Transaction.abort();
         }
         
@@ -480,29 +476,33 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
           'user2': targetUserId,
           'createdAt': ServerValue.timestamp,
           'initiator': myUserId,
+          'roomId': roomId,
         });
       });
       
       if (result.committed) {
-        // Update both users' status
-        await _database.child('random_pool/$myUserId/status').set('matched');
-        await _database.child('random_pool/$myUserId/matchedWith').set(targetUserId);
-        await _database.child('random_pool/$myUserId/roomId').set(roomId);
+        // Update both users' status with the unique roomId
+        await _database.child('random_pool/$myUserId').update({
+          'status': 'matched',
+          'matchedWith': targetUserId,
+          'roomId': roomId,
+        });
         
-        await _database.child('random_pool/$targetUserId/status').set('matched');
-        await _database.child('random_pool/$targetUserId/matchedWith').set(myUserId);
-        await _database.child('random_pool/$targetUserId/roomId').set(roomId);
+        await _database.child('random_pool/$targetUserId').update({
+          'status': 'matched',
+          'matchedWith': myUserId,
+          'roomId': roomId,
+        });
         
-        return true;
+        return roomId;
       }
       
-      return false;
+      return null;
     } catch (e) {
-      return false;
+      return null;
     }
   }
 
-  /// Listen for incoming match requests
   void _listenForMatchRequests() {
     _matchSubscription?.cancel();
     
@@ -510,18 +510,28 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
         .child('random_pool/$myUserId')
         .onValue
         .listen((event) async {
-      // Don't process match if ad is showing
       if (!_isSearching || !_isTabActive || _isConnected || _isConnecting || _adService.isShowingAd) return;
       
       if (event.snapshot.exists && event.snapshot.value != null) {
         final data = event.snapshot.value as Map<dynamic, dynamic>;
         
-        if (data['status'] == 'matched' && data['matchedWith'] != null) {
+        if (data['status'] == 'matched' && data['matchedWith'] != null && data['roomId'] != null) {
           final matchedUserId = data['matchedWith'].toString();
-          final roomId = data['roomId']?.toString();
+          final roomId = data['roomId'].toString();
+          
+          // Check if this user was skipped
+          if (_skippedUsersThisSession.contains(matchedUserId)) {
+            // Reject this match and continue searching
+            await _database.child('random_pool/$myUserId').update({
+              'status': 'waiting',
+              'matchedWith': null,
+              'roomId': null,
+            });
+            return;
+          }
+          
           final initiator = await _getMatchInitiator(roomId);
           
-          // If I'm not the initiator, I'm the receiver
           if (initiator != null && initiator != myUserId) {
             _searchTimer?.cancel();
             _initiateConnection(matchedUserId, isCaller: false, roomId: roomId);
@@ -541,12 +551,15 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
     }
   }
 
-  /// Initiate WebRTC connection (auto-accept, no dialog)
   Future<void> _initiateConnection(String remoteUserId, {required bool isCaller, String? roomId}) async {
-    // Don't connect if ad is showing
     if (!_isTabActive || _isConnected || _isConnecting || _adService.isShowingAd) return;
     
-    // Generate new session ID for this connection
+    // Check if user was skipped
+    if (_skippedUsersThisSession.contains(remoteUserId)) {
+      _skipToNext();
+      return;
+    }
+    
     _currentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
     
     setState(() {
@@ -557,16 +570,16 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
     });
 
     try {
-      // Create room ID if not provided
-      final users = [myUserId, remoteUserId]..sort();
-      _currentRoomId = roomId ?? '${users[0]}_${users[1]}';
+      _currentRoomId = roomId;
       _sessionManager.currentRoomId = _currentRoomId;
       
+      if (_currentRoomId == null) {
+        throw Exception('Room ID is null');
+      }
+      
       if (isCaller) {
-        // Create WebRTC offer directly (no call request dialog)
         await _webrtcService.createOffer(_currentRoomId!, remoteUserId: remoteUserId);
       } else {
-        // Handle offer directly (auto-accept)
         await _webrtcService.handleOffer(_currentRoomId!, remoteUserId);
       }
 
@@ -583,10 +596,8 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
 
   Future<void> _leaveRandomPool() async {
     try {
-      // Remove from random pool
       await _database.child('random_pool/$myUserId').remove();
       
-      // Clean up any match
       if (_currentRoomId != null) {
         await _database.child('random_matches/$_currentRoomId').remove();
       }
@@ -596,21 +607,18 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   }
 
   Future<void> _endCurrentCall() async {
-    // Clear remote renderer FIRST to prevent freeze
     _clearRemoteRenderer();
     
-    // Cancel any ongoing search/match listeners
     _searchTimer?.cancel();
     _matchSubscription?.cancel();
     
     if (_currentRoomId != null) {
       try {
-        // End WebRTC call first
         await _webrtcService.endCall(_currentRoomId!);
-        // Then cleanup Firebase
         await _database.child('random_matches/$_currentRoomId').remove();
+        await _database.child('webrtc_signaling/$_currentRoomId').remove();
       } catch (e) {
-        // Ignore errors during cleanup
+        // Ignore
       }
       _currentRoomId = null;
     }
@@ -618,14 +626,16 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   }
 
   Future<void> _skipToNext() async {
-    // IMPORTANT: Stop searching first to prevent race conditions
+    // Add current connected user to skipped list
+    if (_connectedUserId != null) {
+      _skippedUsersThisSession.add(_connectedUserId!);
+    }
+    
     _searchTimer?.cancel();
     _matchSubscription?.cancel();
     
-    // Clear remote renderer FIRST to prevent freeze
     _clearRemoteRenderer();
     
-    // End current call and cleanup
     await _endCurrentCall();
     await _leaveRandomPool();
     
@@ -638,12 +648,11 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
       _statusText = 'Searching for someone...';
     });
     
-    // Small delay to ensure cleanup is complete
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Longer delay for proper cleanup
+    await Future.delayed(const Duration(milliseconds: 800));
     
     if (!mounted || !_isTabActive) return;
     
-    // Start searching again
     _startSearching();
   }
 
@@ -651,6 +660,9 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
     _searchTimer?.cancel();
     _matchSubscription?.cancel();
     _leaveRandomPool();
+    
+    // Clear skipped users when stopping search
+    _skippedUsersThisSession.clear();
     
     if (mounted) {
       setState(() {
@@ -663,7 +675,6 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
 
   void _toggleMute() {
     _webrtcService.toggleMicrophone();
-    // Sync state from actual WebRTC state
     setState(() {
       _isMuted = !_webrtcService.isMicEnabled;
     });
@@ -671,21 +682,18 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
 
   void _toggleCamera() {
     _webrtcService.toggleCamera();
-    // Sync state from actual WebRTC state
     setState(() {
       _isCameraOff = !_webrtcService.isCameraEnabled;
     });
   }
 
   void _switchCamera() {
-    // First toggle the mirror state, then switch camera
     setState(() {
       _isFrontCamera = !_isFrontCamera;
     });
     _webrtcService.switchCamera();
   }
 
-  // Speaker toggle for Bluetooth/Speaker audio routing
   bool _isSpeakerOn = false;
   
   Future<void> _toggleSpeaker() async {
@@ -841,7 +849,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
               // Local video - Small window in corner (WhatsApp style)
               if (_isCameraReady && _localRenderer.srcObject != null)
                 Positioned(
-                  top: 60,
+                  top: 68,
                   right: 16,
                   child: GestureDetector(
                     onTap: _switchCamera,
@@ -922,8 +930,8 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
               // Skip hint - Top right (when connected or searching)
               if ((_isConnected || _isSearching) && _isUIVisible)
                 Positioned(
-                  top: 16,
-                  right: _isCameraReady && _localRenderer.srcObject != null ? 150 : 16,
+                  top: 320,
+                  right: _isCameraReady && _localRenderer.srcObject != null ? 8 : 16,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
@@ -947,6 +955,38 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                ),
+
+              // Banner - Top right corner (controlled from admin panel)
+              if (_showBanner && !_isConnected && !_isSearching && _isUIVisible)
+                Positioned(
+                  top: 10,
+                  right: 16,
+                  child: Container(
+                    height: 55,
+                    width: 220,
+                    decoration: BoxDecoration(
+                      color: _bannerColor,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Banner',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ),

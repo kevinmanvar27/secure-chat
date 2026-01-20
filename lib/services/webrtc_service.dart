@@ -43,6 +43,9 @@ class WebRTCService {
   bool _isConnected = false;
   Timer? _disconnectTimer;
   Timer? _connectionTimeout;
+  
+  // Track current room ID for cleanup
+  String? _currentRoomId;
 
   // Better ICE servers with multiple STUN and TURN for reliability
   final Map<String, dynamic> _iceServers = {
@@ -253,6 +256,9 @@ class WebRTCService {
     try {
       print('Creating offer for room: $roomId');
       
+      // Store room ID for cleanup
+      _currentRoomId = roomId;
+      
       // Start connection timeout
       _startConnectionTimeout();
       
@@ -308,6 +314,9 @@ class WebRTCService {
     bool _hasProcessedOffer = false;
     
     try {
+      // Store room ID for cleanup
+      _currentRoomId = roomId;
+      
       // Start connection timeout
       _startConnectionTimeout();
       
@@ -467,18 +476,38 @@ class WebRTCService {
 
   Future<void> endCall(String roomId) async {
     try {
-      await _database.child('webrtc_signaling/$roomId').remove().catchError((error) {
-      });
+      // Remove signaling data from Firebase IMMEDIATELY
+      await _cleanupSignalingData(roomId);
       
       // Reset connection state for next call
       await resetConnection();
     } catch (e) {
+      print('Error ending call: $e');
+    }
+  }
+  
+  /// Clean up all signaling data from Firebase
+  Future<void> _cleanupSignalingData(String? roomId) async {
+    if (roomId == null) return;
+    
+    try {
+      // Remove all signaling data for this room
+      await _database.child('webrtc_signaling/$roomId').remove();
+      print('🧹 Cleaned signaling data for room: $roomId');
+    } catch (e) {
+      print('Error cleaning signaling data: $e');
     }
   }
   
   /// Reset connection for a new call (without disposing streams)
   Future<void> resetConnection() async {
     _isConnected = false;
+    
+    // IMPORTANT: Clean up signaling data FIRST
+    if (_currentRoomId != null) {
+      await _cleanupSignalingData(_currentRoomId);
+      _currentRoomId = null;
+    }
     
     // Cancel all timers
     _cancelConnectionTimeout();

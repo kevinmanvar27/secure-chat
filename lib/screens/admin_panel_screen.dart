@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/ad_service.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -10,13 +11,30 @@ class AdminPanelScreen extends StatefulWidget {
 
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final AdService _adService = AdService();
+  final DatabaseReference _database = FirebaseDatabase.instance.ref();
   bool _adsEnabled = true;
+  bool _bannerEnabled = false;
   bool _isLoading = false;
+  bool _isBannerLoading = false;
 
   @override
   void initState() {
     super.initState();
     _adsEnabled = _adService.adsEnabled;
+    _loadBannerSetting();
+  }
+  
+  Future<void> _loadBannerSetting() async {
+    try {
+      final snapshot = await _database.child('app_settings/random_banner/enabled').get();
+      if (mounted && snapshot.exists) {
+        setState(() {
+          _bannerEnabled = snapshot.value as bool? ?? false;
+        });
+      }
+    } catch (e) {
+      // Ignore
+    }
   }
 
   Future<void> _toggleAds(bool value) async {
@@ -37,6 +55,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       );
     }
   }
+  
+  Future<void> _toggleBanner(bool value) async {
+    setState(() => _isBannerLoading = true);
+    try {
+      await _database.child('app_settings/random_banner').set({
+        'enabled': value,
+        'color': '#9C27B0', // Purple color as default
+      });
+      setState(() {
+        _bannerEnabled = value;
+        _isBannerLoading = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value ? 'Banner Enabled' : 'Banner Disabled'),
+            backgroundColor: value ? Colors.green : Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isBannerLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +93,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,6 +260,106 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               
               const SizedBox(height: 20),
               
+              // Random Screen Banner Control
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: _bannerEnabled 
+                                ? Colors.purple.withOpacity(0.1)
+                                : Colors.grey.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.view_carousel,
+                            color: _bannerEnabled ? Colors.purple : Colors.grey,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Random Screen Banner',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _bannerEnabled ? 'Banner is visible' : 'Banner is hidden',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_isBannerLoading)
+                          const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          Switch(
+                            value: _bannerEnabled,
+                            onChanged: _toggleBanner,
+                            activeColor: Colors.purple,
+                            inactiveThumbColor: Colors.grey,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Shows a banner on the Random screen. Height: 80px. Firebase path: app_settings/random_banner',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+              
               // Firebase Path Info
               Container(
                 padding: const EdgeInsets.all(16),
@@ -261,7 +405,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ),
               ),
               
-              const Spacer(),
+              const SizedBox(height: 30),
               
               // Footer
               Center(
