@@ -17,7 +17,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;  // 0 = Random (now first tab)
+  int _currentIndex = 0;  // 0 = Home (default)
   int _previousIndex = 0;
   final AdService _adService = AdService();
   int _tabSwitchCount = 0;
@@ -26,22 +26,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final GlobalKey<RandomTabState> _randomTabKey = GlobalKey<RandomTabState>();
   
   // Lazy loading - track which tabs have been visited
-  final Set<int> _loadedTabs = {0}; // Random tab loaded by default (index 0)
+  final Set<int> _loadedTabs = {0}; // Home tab loaded by default
   
   // Tab widgets - created lazily
-  Widget? _randomTab;  // Index 0
-  Widget? _homeTab;    // Index 1
+  Widget? _homeTab;    // Index 0
+  Widget? _randomTab;  // Index 1
   Widget? _contactsTab; // Index 2
 
   @override
   void initState() {
     super.initState();
-    // Create random tab initially (it's the default now)
-    _randomTab = RandomTab(key: _randomTabKey);
-    // Auto-start random tab camera on app launch
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _randomTabKey.currentState?.onTabActive();
-    });
+    // Create home tab initially (it's the default)
+    _homeTab = HomeTab(initialRemoteId: widget.initialRemoteId);
   }
 
   @override
@@ -55,11 +51,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget _getTab(int index) {
     switch (index) {
       case 0:
-        _randomTab ??= RandomTab(key: _randomTabKey);
-        return _randomTab!;
-      case 1:
         _homeTab ??= HomeTab(initialRemoteId: widget.initialRemoteId);
         return _homeTab!;
+      case 1:
+        _randomTab ??= RandomTab(key: _randomTabKey);
+        return _randomTab!;
       case 2:
         _contactsTab ??= const ContactsTab();
         return _contactsTab!;
@@ -69,8 +65,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _onTabChanged(int index) async {
-    // If leaving random tab (index 0), check if we need confirmation
-    if (_currentIndex == 0 && index != 0) {
+    // If leaving random tab (index 1), check if we need confirmation
+    if (_currentIndex == 1 && index != 1) {
       // Leaving random tab - check if in call
       final canSwitch = await _randomTabKey.currentState?.onTabInactive() ?? true;
       if (!canSwitch) {
@@ -83,7 +79,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     
     // Show interstitial ad every 3 tab switches (not for random tab - it has its own logic)
     _tabSwitchCount++;
-    if (_tabSwitchCount % 3 == 0 && index != 0) {
+    if (_tabSwitchCount % 3 == 0 && index != 1) {
       await _adService.showInterstitialAd();
     }
     
@@ -94,7 +90,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _currentIndex = index;
     });
     
-    if (index == 0 && _previousIndex != 0) {
+    if (index == 1 && _previousIndex != 1) {
       // Entering random tab - start camera
       // Small delay to ensure widget is built
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -103,7 +99,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
     
     // Leave random pool when not on random tab
-    if (index != 0) {
+    if (index != 1) {
       UserService().leaveRandomPool(SessionManager().userId);
     }
   }
@@ -121,7 +117,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          // Tab order: Random (0), Home (1), Contacts (2)
+          // Tab order: Home (0), Random (1), Contacts (2)
           _loadedTabs.contains(0) ? _getTab(0) : const SizedBox(),
           _loadedTabs.contains(1) ? _getTab(1) : const SizedBox(),
           _loadedTabs.contains(2) ? _getTab(2) : const SizedBox(),
@@ -147,16 +143,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               selectedItemColor: Theme.of(context).colorScheme.primary,
               unselectedItemColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
               items: const [
-                // Reordered: Random first, then Home, then Contacts
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.shuffle_rounded),
-                  activeIcon: Icon(Icons.shuffle_rounded),
-                  label: 'Random',
-                ),
+                // Order: Home, Random, Contacts
                 BottomNavigationBarItem(
                   icon: Icon(Icons.home_rounded),
                   activeIcon: Icon(Icons.home_rounded),
                   label: 'Home',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.shuffle_rounded),
+                  activeIcon: Icon(Icons.shuffle_rounded),
+                  label: 'Random',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.contacts_rounded),
@@ -180,14 +176,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     'Designed and Developed by ',
                     style: TextStyle(
                       fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                      color: Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.white 
+                          : Colors.black,
                     ),
                   ),
                   Text(
-                    'Rektech',
+                    'Rek',
                     style: TextStyle(
                       fontSize: 11,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: Color.fromARGB(255, 255, 107, 0), // Fixed orange color
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                  Text(
+                    'Tech',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.white 
+                          : Colors.black,
                       fontWeight: FontWeight.bold,
                       decoration: TextDecoration.underline,
                     ),
