@@ -1,0 +1,60 @@
+name: chatapp
+description: "Secure P2P Video Chat Application"
+publish_to: 'none'
+
+version: 2.0.5+11
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  
+  # WebRTC for P2P video calling
+  flutter_webrtc: ^1.2.1
+  
+  # Firebase for signaling and data storage
+  firebase_core: ^4.3.0
+  firebase_database: ^12.1.1
+  firebase_auth: ^6.1.3
+  
+  # For generating random IDs
+  uuid: ^4.5.2
+  
+  # For permissions
+  permission_handler: ^12.0.1
+  
+  # For contacts
+  flutter_contacts: ^1.1.9+2
+  
+  # For sending SMS and launching URLs
+  url_launcher: ^6.2.5
+  
+  # For keeping screen awake during calls
+  wakelock_plus: ^1.2.8
+  
+  # For deep linking
+  app_links: ^6.4.0
+  
+  # For sharing
+  share_plus: ^10.1.4
+  
+  # For persistent storage
+  shared_preferences: ^2.2.2
+  google_mobile_ads: ^7.0.0
+  provider: ^6.1.5+1
+  
+  # For opening app settings (deep link permission)
+  android_intent_plus: ^5.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
