@@ -19,15 +19,27 @@ class WebRTCService {
 
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
 
-  final _localStreamController = StreamController<MediaStream>.broadcast();
-  final _remoteStreamController = StreamController<MediaStream>.broadcast();
-  
-  final _remoteDisconnectController = StreamController<bool>.broadcast();
+  // Use late initialization so we can recreate if closed
+  StreamController<MediaStream> _localStreamController = StreamController<MediaStream>.broadcast();
+  StreamController<MediaStream> _remoteStreamController = StreamController<MediaStream>.broadcast();
+  StreamController<bool> _remoteDisconnectController = StreamController<bool>.broadcast();
 
   Stream<MediaStream> get localStream => _localStreamController.stream;
   Stream<MediaStream> get remoteStream => _remoteStreamController.stream;
   Stream<bool> get remoteDisconnect => _remoteDisconnectController.stream;
   
+  /// Ensure stream controllers are open (recreate if closed)
+  void _ensureControllersOpen() {
+    if (_localStreamController.isClosed) {
+      _localStreamController = StreamController<MediaStream>.broadcast();
+    }
+    if (_remoteStreamController.isClosed) {
+      _remoteStreamController = StreamController<MediaStream>.broadcast();
+    }
+    if (_remoteDisconnectController.isClosed) {
+      _remoteDisconnectController = StreamController<bool>.broadcast();
+    }
+  }
   MediaStream? get currentLocalStream => _localStream;
   MediaStream? get currentRemoteStream => _remoteStream;
   
@@ -108,6 +120,9 @@ class WebRTCService {
   Future<void> initializeLocalStream() async {
     try {
       print('📹 Initializing local stream...');
+      
+      // Ensure stream controllers are open
+      _ensureControllersOpen();
       
       // Dispose old stream if exists
       if (_localStream != null) {
@@ -329,6 +344,9 @@ class WebRTCService {
     try {
       print('Creating offer for room: $roomId');
       
+      // Ensure stream controllers are open
+      _ensureControllersOpen();
+      
       // Store room ID for cleanup
       _currentRoomId = roomId;
       
@@ -406,6 +424,9 @@ class WebRTCService {
     bool _hasProcessedOffer = false;
     
     try {
+      // Ensure stream controllers are open
+      _ensureControllersOpen();
+      
       // Store room ID for cleanup
       _currentRoomId = roomId;
       
@@ -720,6 +741,9 @@ class WebRTCService {
   Future<void> _reinitializeLocalStream() async {
     try {
       print('🔄 Reinitializing local stream...');
+      
+      // Ensure stream controllers are open
+      _ensureControllersOpen();
       
       // Dispose old local stream tracks
       if (_localStream != null) {

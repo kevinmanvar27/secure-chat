@@ -55,7 +55,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     _remoteStreamSubscription?.cancel();
     _disconnectSubscription?.cancel();
     _proximitySubscription?.cancel();
-    _webrtcService.dispose();
+    // Use endCall instead of dispose - dispose destroys the singleton permanently!
+    _webrtcService.endCall(_effectiveRoomId);
     WakelockPlus.disable();
     super.dispose();
   }
