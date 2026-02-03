@@ -17,10 +17,9 @@ class JoinRequestDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = AppTheme.getPrimaryColor(context);
-    final secondaryColor = AppTheme.getSecondaryColor(context);
-    final onSurfaceColor = AppTheme.getOnSurfaceColor(context);
     final backgroundColor = AppTheme.getBackgroundColor(context);
+    final onSurfaceColor = AppTheme.getOnSurfaceColor(context);
+    final primaryColor = AppTheme.getPrimaryColor(context);
     final errorColor = AppTheme.getErrorColor(context);
     
     return Dialog(
@@ -30,14 +29,6 @@ class JoinRequestDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              primaryColor.withOpacity(0.1),
-              secondaryColor.withOpacity(0.1),
-            ],
-          ),
           color: backgroundColor,
           borderRadius: BorderRadius.circular(20),
         ),
@@ -47,13 +38,13 @@ class JoinRequestDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.2),
+                color: primaryColor,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.person_add,
                 size: 48,
-                color: primaryColor,
+                color: Colors.white,
               ),
             ),
             const SizedBox(height: 20),
@@ -101,7 +92,7 @@ class JoinRequestDialog extends StatelessWidget {
                     onPressed: onReject,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: errorColor,
-                      foregroundColor: AppTheme.getOnErrorColor(context),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -130,8 +121,8 @@ class JoinRequestDialog extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: onAccept,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: secondaryColor,
-                      foregroundColor: AppTheme.getOnPrimaryColor(context),
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),

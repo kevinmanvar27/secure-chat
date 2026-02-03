@@ -990,7 +990,8 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final primaryColor = AppTheme.getPrimaryColor(context);
     final secondaryColor = AppTheme.getSecondaryColor(context);
-    final surfaceColor = AppTheme.getSurfaceColor(context);
+    // Use a visible gray color for control buttons (works on black video background)
+    final controlButtonColor = Colors.grey.shade700;
     final onSurfaceColor = AppTheme.getOnSurfaceColor(context);
     final errorColor = AppTheme.getErrorColor(context);
     final overlayColor = AppTheme.getOverlayColor(context);
@@ -1017,10 +1018,10 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
               // Apply layout in all states (not just connected)
               if (_videoLayout == RandomVideoLayoutType.omegle)
                 // Omegle style - Vertical split
-                _buildOmegleLayout(surfaceColor, onSurfaceColor, overlayColor, primaryColor)
+                _buildOmegleLayout(controlButtonColor, onSurfaceColor, overlayColor, primaryColor)
               else
                 // WhatsApp style (default) - Full screen remote + PiP local
-                ..._buildWhatsAppLayout(surfaceColor, onSurfaceColor, overlayColor, primaryColor),
+                ..._buildWhatsAppLayout(controlButtonColor, onSurfaceColor, overlayColor, primaryColor),
 
               // Status badge - Top left
               Positioned(
@@ -1031,7 +1032,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                   decoration: BoxDecoration(
                     color: _isConnected 
                         ? secondaryColor.withOpacity(0.9)
-                        : (_isSearching || _isConnecting ? primaryColor : surfaceColor.withOpacity(0.8)),
+                        : (_isSearching || _isConnecting ? primaryColor : controlButtonColor.withOpacity(0.8)),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -1168,7 +1169,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                                 _buildControlButton(
                                   icon: _isMuted ? Icons.mic_off : Icons.mic,
                                   label: '', // No text label
-                                  color: _isMuted ? errorColor : surfaceColor,
+                                  color: _isMuted ? errorColor : controlButtonColor,
                                   onPressed: _toggleMute,
                                 ),
                                 const SizedBox(width: 12),
@@ -1177,7 +1178,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                                 _buildControlButton(
                                   icon: _isSpeakerOn ? Icons.volume_up : Icons.volume_down,
                                   label: '', // No text label
-                                  color: _isSpeakerOn ? secondaryColor : surfaceColor,
+                                  color: _isSpeakerOn ? secondaryColor : controlButtonColor,
                                   onPressed: _toggleSpeaker,
                                 ),
                                 const SizedBox(width: 12),
@@ -1196,7 +1197,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                                 _buildControlButton(
                                   icon: _isCameraOff ? Icons.videocam_off : Icons.videocam,
                                   label: '', // No text label
-                                  color: _isCameraOff ? errorColor : surfaceColor,
+                                  color: _isCameraOff ? errorColor : controlButtonColor,
                                   onPressed: _toggleCamera,
                                 ),
                                 const SizedBox(width: 12),
@@ -1205,7 +1206,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                                 _buildControlButton(
                                   icon: Icons.flip_camera_ios,
                                   label: '', // No text label
-                                  color: surfaceColor,
+                                  color: controlButtonColor,
                                   onPressed: _switchCamera,
                                 ),
                                 const SizedBox(width: 12),
@@ -1216,7 +1217,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                                       ? Icons.view_agenda 
                                       : Icons.picture_in_picture,
                                   label: '', // No text label
-                                  color: surfaceColor,
+                                  color: controlButtonColor,
                                   onPressed: _toggleVideoLayout,
                                 ),
                               ],
@@ -1229,7 +1230,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                                       ? Icons.view_agenda 
                                       : Icons.picture_in_picture,
                                   label: _videoLayout == RandomVideoLayoutType.whatsapp ? 'Split' : 'PiP',
-                                  color: surfaceColor,
+                                  color: controlButtonColor,
                                   onPressed: _toggleVideoLayout,
                                 ),
                                 const SizedBox(width: 20),
@@ -1269,7 +1270,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   }
 
   // Build WhatsApp style layout (full screen remote + PiP local)
-  List<Widget> _buildWhatsAppLayout(Color surfaceColor, Color onSurfaceColor, Color overlayColor, Color primaryColor) {
+  List<Widget> _buildWhatsAppLayout(Color buttonColor, Color onSurfaceColor, Color overlayColor, Color primaryColor) {
     return [
       // Full screen - Remote video OR Loading/Placeholder
       Positioned.fill(
@@ -1283,7 +1284,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
             }
           },
           child: Container(
-            color: surfaceColor,
+            color: buttonColor,
             child: _isConnected && _remoteRenderer.srcObject != null
                 ? RTCVideoView(
                     _remoteRenderer,
@@ -1390,7 +1391,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
                         objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                       )
                     : Container(
-                        color: surfaceColor,
+                        color: buttonColor,
                         child: Center(
                           child: Icon(
                             Icons.videocam_off,
@@ -1407,7 +1408,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
   }
 
   // Build Omegle style layout (vertical split - remote top, local bottom)
-  Widget _buildOmegleLayout(Color surfaceColor, Color onSurfaceColor, Color overlayColor, Color primaryColor) {
+  Widget _buildOmegleLayout(Color buttonColor, Color onSurfaceColor, Color overlayColor, Color primaryColor) {
     return Positioned.fill(
       child: GestureDetector(
         onHorizontalDragEnd: (details) {
@@ -1425,7 +1426,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: surfaceColor,
+                  color: buttonColor,
                   border: Border(
                     bottom: BorderSide(
                       color: onSurfaceColor.withOpacity(0.2),
@@ -1486,7 +1487,7 @@ class RandomTabState extends State<RandomTab> with WidgetsBindingObserver {
             Expanded(
               child: Container(
                 width: double.infinity,
-                color: surfaceColor,
+                color: buttonColor,
                 child: _isCameraReady && _localRenderer.srcObject != null && !_isCameraOff
                     ? RTCVideoView(
                         _localRenderer,

@@ -68,9 +68,9 @@ class _IncomingCallDialogState extends State<IncomingCallDialog>
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = AppTheme.getPrimaryColor(context);
-    final secondaryColor = AppTheme.getSecondaryColor(context);
+    final backgroundColor = AppTheme.getBackgroundColor(context);
     final onSurfaceColor = AppTheme.getOnSurfaceColor(context);
+    final primaryColor = AppTheme.getPrimaryColor(context);
     final errorColor = AppTheme.getErrorColor(context);
     
     return Dialog(
@@ -78,18 +78,11 @@ class _IncomingCallDialogState extends State<IncomingCallDialog>
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              primaryColor,
-              primaryColor.withOpacity(0.8),
-            ],
-          ),
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: primaryColor.withOpacity(0.5),
+              color: Colors.black.withOpacity(0.2),
               blurRadius: 20,
               spreadRadius: 5,
             ),
@@ -98,16 +91,18 @@ class _IncomingCallDialogState extends State<IncomingCallDialog>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Title
             Text(
               _getCallTypeLabel(),
               style: TextStyle(
-                color: AppTheme.getOnPrimaryColor(context),
+                color: onSurfaceColor,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 24),
 
+            // Animated icon
             ScaleTransition(
               scale: _pulseAnimation,
               child: Container(
@@ -115,62 +110,64 @@ class _IncomingCallDialogState extends State<IncomingCallDialog>
                 height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [
-                      secondaryColor,
-                      secondaryColor.withOpacity(0.7),
-                    ],
-                  ),
+                  color: primaryColor,
                   boxShadow: [
                     BoxShadow(
-                      color: secondaryColor.withOpacity(0.5),
+                      color: primaryColor.withOpacity(0.5),
                       blurRadius: 20,
                       spreadRadius: 5,
                     ),
                   ],
                 ),
-                child: Icon(
-                  _getCallTypeIcon(),
+                child: const Icon(
+                  Icons.person,
                   size: 50,
-                  color: AppTheme.getOnPrimaryColor(context),
+                  color: Colors.white,
                 ),
               ),
             ),
             const SizedBox(height: 24),
 
+            // Caller name
             Text(
               widget.request.callerName,
               style: TextStyle(
-                color: AppTheme.getOnPrimaryColor(context),
+                color: onSurfaceColor,
                 fontSize: 22,
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 8),
 
+            // Caller ID
             Text(
               'ID: ${widget.request.callerId}',
               style: TextStyle(
-                color: AppTheme.getOnPrimaryColor(context).withOpacity(0.7),
+                color: onSurfaceColor.withOpacity(0.6),
                 fontSize: 14,
               ),
             ),
             const SizedBox(height: 32),
 
+            // Action buttons
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
+                // Reject button
                 _buildActionButton(
                   icon: Icons.call_end,
                   label: 'Reject',
-                  color: errorColor,
+                  buttonColor: errorColor,
+                  textColor: onSurfaceColor,
                   onPressed: widget.onReject,
                 ),
 
+                // Accept button
                 _buildActionButton(
                   icon: _getCallTypeIcon(),
                   label: 'Accept',
-                  color: secondaryColor,
+                  buttonColor: primaryColor,
+                  textColor: onSurfaceColor,
                   onPressed: widget.onAccept,
                 ),
               ],
@@ -184,7 +181,8 @@ class _IncomingCallDialogState extends State<IncomingCallDialog>
   Widget _buildActionButton({
     required IconData icon,
     required String label,
-    required Color color,
+    required Color buttonColor,
+    required Color textColor,
     required VoidCallback onPressed,
   }) {
     return Column(
@@ -199,10 +197,10 @@ class _IncomingCallDialogState extends State<IncomingCallDialog>
               height: 70,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: color,
+                color: buttonColor,
                 boxShadow: [
                   BoxShadow(
-                    color: color.withOpacity(0.5),
+                    color: buttonColor.withOpacity(0.5),
                     blurRadius: 15,
                     spreadRadius: 2,
                   ),
@@ -210,7 +208,7 @@ class _IncomingCallDialogState extends State<IncomingCallDialog>
               ),
               child: Icon(
                 icon,
-                color: AppTheme.getOnPrimaryColor(context),
+                color: Colors.white,
                 size: 32,
               ),
             ),
@@ -220,7 +218,7 @@ class _IncomingCallDialogState extends State<IncomingCallDialog>
         Text(
           label,
           style: TextStyle(
-            color: AppTheme.getOnPrimaryColor(context),
+            color: textColor,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),

@@ -69,7 +69,6 @@ class _InviteUserDialogState extends State<InviteUserDialog> {
   @override
   Widget build(BuildContext context) {
     final primaryColor = AppTheme.getPrimaryColor(context);
-    final secondaryColor = AppTheme.getSecondaryColor(context);
     final surfaceColor = AppTheme.getSurfaceColor(context);
     final onSurfaceColor = AppTheme.getOnSurfaceColor(context);
     final backgroundColor = AppTheme.getBackgroundColor(context);
@@ -81,14 +80,6 @@ class _InviteUserDialogState extends State<InviteUserDialog> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              primaryColor.withOpacity(0.1),
-              secondaryColor.withOpacity(0.1),
-            ],
-          ),
           color: backgroundColor,
           borderRadius: BorderRadius.circular(20),
         ),
@@ -98,13 +89,13 @@ class _InviteUserDialogState extends State<InviteUserDialog> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.2),
+                color: primaryColor,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.person_add,
                 size: 48,
-                color: primaryColor,
+                color: Colors.white,
               ),
             ),
             const SizedBox(height: 20),
@@ -129,9 +120,12 @@ class _InviteUserDialogState extends State<InviteUserDialog> {
 
             TextField(
               controller: _userIdController,
+              style: TextStyle(color: onSurfaceColor),
               decoration: InputDecoration(
                 labelText: 'User ID',
+                labelStyle: TextStyle(color: onSurfaceColor.withOpacity(0.7)),
                 hintText: 'Enter user ID to invite',
+                hintStyle: TextStyle(color: onSurfaceColor.withOpacity(0.5)),
                 prefixIcon: Icon(Icons.person, color: primaryColor),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -172,7 +166,7 @@ class _InviteUserDialogState extends State<InviteUserDialog> {
                     onPressed: _isLoading ? null : _handleInvite,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
-                      foregroundColor: AppTheme.getOnPrimaryColor(context),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -180,22 +174,20 @@ class _InviteUserDialogState extends State<InviteUserDialog> {
                       elevation: 2,
                     ),
                     child: _isLoading
-                        ? SizedBox(
+                        ? const SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                AppTheme.getOnPrimaryColor(context),
-                              ),
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
-                        : Row(
+                        : const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.send, size: 20),
-                              const SizedBox(width: 8),
-                              const Text(
+                              Icon(Icons.send, size: 20),
+                              SizedBox(width: 8),
+                              Text(
                                 'Invite',
                                 style: TextStyle(
                                   fontSize: 16,

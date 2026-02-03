@@ -39,28 +39,21 @@ class _OutgoingCallDialogState extends State<OutgoingCallDialog>
 
   @override
   Widget build(BuildContext context) {
+    final backgroundColor = AppTheme.getBackgroundColor(context);
+    final onSurfaceColor = AppTheme.getOnSurfaceColor(context);
     final primaryColor = AppTheme.getPrimaryColor(context);
-    final secondaryColor = AppTheme.getSecondaryColor(context);
     final errorColor = AppTheme.getErrorColor(context);
-    final onPrimaryColor = AppTheme.getOnPrimaryColor(context);
     
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              primaryColor.withOpacity(0.9),
-              primaryColor,
-            ],
-          ),
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: primaryColor.withOpacity(0.5),
+              color: Colors.black.withOpacity(0.2),
               blurRadius: 20,
               spreadRadius: 5,
             ),
@@ -72,7 +65,7 @@ class _OutgoingCallDialogState extends State<OutgoingCallDialog>
             Text(
               'Calling...',
               style: TextStyle(
-                color: onPrimaryColor,
+                color: onSurfaceColor,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
@@ -86,24 +79,19 @@ class _OutgoingCallDialogState extends State<OutgoingCallDialog>
                 height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [
-                      secondaryColor,
-                      secondaryColor.withOpacity(0.7),
-                    ],
-                  ),
+                  color: primaryColor,
                   boxShadow: [
                     BoxShadow(
-                      color: secondaryColor.withOpacity(0.5),
+                      color: primaryColor.withOpacity(0.5),
                       blurRadius: 20,
                       spreadRadius: 5,
                     ),
                   ],
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.phone_in_talk,
                   size: 50,
-                  color: onPrimaryColor,
+                  color: Colors.white,
                 ),
               ),
             ),
@@ -112,7 +100,7 @@ class _OutgoingCallDialogState extends State<OutgoingCallDialog>
             Text(
               widget.receiverName,
               style: TextStyle(
-                color: onPrimaryColor,
+                color: onSurfaceColor,
                 fontSize: 22,
                 fontWeight: FontWeight.w600,
               ),
@@ -122,7 +110,7 @@ class _OutgoingCallDialogState extends State<OutgoingCallDialog>
             Text(
               'ID: ${widget.receiverId}',
               style: TextStyle(
-                color: onPrimaryColor.withOpacity(0.7),
+                color: onSurfaceColor.withOpacity(0.6),
                 fontSize: 14,
               ),
             ),
@@ -131,7 +119,7 @@ class _OutgoingCallDialogState extends State<OutgoingCallDialog>
             Text(
               'Waiting for answer...',
               style: TextStyle(
-                color: onPrimaryColor.withOpacity(0.8),
+                color: onSurfaceColor.withOpacity(0.7),
                 fontSize: 16,
               ),
             ),
@@ -156,9 +144,9 @@ class _OutgoingCallDialogState extends State<OutgoingCallDialog>
                       ),
                     ],
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.call_end,
-                    color: AppTheme.getOnErrorColor(context),
+                    color: Colors.white,
                     size: 32,
                   ),
                 ),
@@ -168,7 +156,7 @@ class _OutgoingCallDialogState extends State<OutgoingCallDialog>
             Text(
               'Cancel',
               style: TextStyle(
-                color: onPrimaryColor,
+                color: onSurfaceColor,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
