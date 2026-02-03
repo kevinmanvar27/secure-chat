@@ -1,0 +1,1 @@
+ C:\\StudioProjects\\chatapp-master\\.dart_tool\\flutter_build\\0218a242f331dd4b7e522958015b0bb5\\native_assets.json: 
